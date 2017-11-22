@@ -1,3 +1,4 @@
+import logging
 import subprocess
 from tempfile import TemporaryDirectory
 import attr
@@ -17,10 +18,11 @@ class op():
         return self._value
 
 
-def ip(file=False, default=attr.Factory(op), validator=None, repr=True, cmp=True, hash=None, init=True,
+def ip(file=False, name=None, default=attr.Factory(op), validator=None, repr=True, cmp=True, hash=None, init=True,
        convert=None, metadata={}):
     metadata = dict() if not metadata else metadata
     metadata['__connector_type'] = 'INPUT'
+    metadata['__name'] = name
     if file:
         metadata['__input_type'] = 'FILE'
     else:
@@ -29,17 +31,36 @@ def ip(file=False, default=attr.Factory(op), validator=None, repr=True, cmp=True
 
 
 class Stage():
+    def _setup(self):
+        self._step_dir = os.path.join(
+            self.working_dir,
+            '{2:03d}-{3}'
+        )
+        os.mkdir(self._step_dir)
+
     def _gather_inputs(self):
         inputs = attr.asdict(self)
         for k, v in inputs.items():
             metadata = getattr(attr.fields(self.__class__), k).metadata
             is_input = metadata['__connector_type'] == 'INPUT'
             is_file = metadata['__input_type'] == 'FILE'
+            dest_name = metadata['__name']
             if is_input and is_file:
-                msg = 'would gather {0} to {1}/{2:03d}-{3}'.format(v(), self.working_dir, self.step, type(self).__name__.lower())
-                print(msg)
+                msg = 'copying {0} to {1}//{4}'.format(
+                    v(),
+                    self.working_dir,
+                    self.step,
+                    type(self).__name__.lower(),
+                    dest_name
+                )
+                logging.info(msg)
+    
+    def _copy_to_working_dir(f)
+        
+        shutil.copy(f, os.path.join(self.working_dir, 
 
     def run(self):
+        self._setup()
         self._gather_inputs()
         self.process()
 
