@@ -102,3 +102,6 @@ ENV/
 
 # Visual Studio Code project settings
 .vscode/
+
+# Temporary test data
+tmp/
