@@ -74,7 +74,7 @@ class Connector():
     def is_file(self):
         return self._is_file
 
-    def connect():
+    def connect(self):
         pass
 
 
@@ -84,6 +84,7 @@ class Task():
         self._inputs = []
         self._outputs = []
         self._ip_map = {}
+        self._working_dir = None
 
     def run(self):
         pipeline = Pipeline()
@@ -164,6 +165,7 @@ class InputTask(Task):
 class Pipeline(Singleton):
     _working_dir = None
     _logger = None
+    _root_node = None
 
     def __init__(self, log_level=logging.INFO, working_dir=None):
         Singleton.__init__(self)
