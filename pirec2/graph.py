@@ -19,5 +19,4 @@ def walk_graph(node, graph=None):
 
 
 def _node_name(n):
-    hasher = Hashids()
-    return '{0}-{1}'.format(type(n).__name__, hasher.encode(id(n)))
+    return '{0}-{1:03d}'.format(type(n).__name__, n._id)

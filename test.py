@@ -11,7 +11,7 @@ def load(filename):
 
 
 if __name__ == '__main__':
-    tmp_path = os.path.join(os.getcwd(), 'tmp'))
+    tmp_path = os.path.join(os.getcwd(), 'tmp')
     if not os.path.exists(tmp_path):
         os.makedirs(tmp_path)
     pipeline = Pipeline(working_dir=tmp_path)

@@ -23,7 +23,7 @@ class Shouter(Task):
         with open('quiet.txt', 'r') as quiet_file:
             with open(self.loud.filename, 'w') as loud_file:
                 loud_file.write(str.upper(quiet_file.read()))
-        
+
 
 class Reverser(Task):
     def __init__(self, forward):
@@ -45,7 +45,7 @@ class End(Task):
         super().__init__()
         self.input = self.add_input(word, filename='input.txt')
         self.result = self.add_output()
-     
+
     def process(self):
         p = Pipeline()
         p.logger.info('running End')

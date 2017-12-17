@@ -80,16 +80,19 @@ class Connector():
 
 class Task():
     def __init__(self):
+        pipeline = Pipeline()
         self._ready = False
         self._inputs = []
         self._outputs = []
         self._ip_map = {}
         self._working_dir = None
+        self._id = pipeline.get_next_id()
 
     def run(self):
         pipeline = Pipeline()
         previous_dir = os.getcwd()
-        self._working_dir = tempfile.mkdtemp(dir=pipeline.working_dir)
+        self._working_dir = os.path.join(pipeline.working_dir, self.working_dir_name)
+        os.makedirs(self._working_dir)
         os.chdir(self._working_dir)
         self._ready_inputs()
         try:
@@ -101,6 +104,10 @@ class Task():
         finally:
             pickle.dump(self, open('task.pkl', 'wb'))
             os.chdir(previous_dir)
+
+    @property
+    def working_dir_name(self):
+        return '{0}-{1:03d}'.format(type(self).__name__, self._id)
 
     def add_input(self, ip, filename=None):
         self._inputs.append(ip)
@@ -166,6 +173,7 @@ class Pipeline(Singleton):
     _working_dir = None
     _logger = None
     _root_node = None
+    _unit_id = None
 
     def __init__(self, log_level=logging.INFO, working_dir=None):
         Singleton.__init__(self)
@@ -176,12 +184,18 @@ class Pipeline(Singleton):
                 self._working_dir = tempfile.mkdtemp()
         if self._logger is None:
             self._configure_logging(log_level)
+        if self._unit_id is None:
+            self._unit_id = 0
 
     def _configure_logging(self, log_level):
         self._logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
         stderr_handler = logging.StreamHandler()
         self._logger.addHandler(stderr_handler)
+
+    def get_next_id(self):
+        self._unit_id += 1
+        return self._unit_id
 
     @property
     def logger(self):
