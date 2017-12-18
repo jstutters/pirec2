@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import pickle
@@ -87,11 +88,12 @@ class Task():
         self._ip_map = {}
         self._working_dir = None
         self._id = pipeline.get_next_id()
+        pipeline.register(self)
 
     def run(self):
         pipeline = Pipeline()
         previous_dir = os.getcwd()
-        self._working_dir = os.path.join(pipeline.working_dir, self.working_dir_name)
+        self._working_dir = os.path.join(pipeline.working_dir, self.key)
         os.makedirs(self._working_dir)
         os.chdir(self._working_dir)
         self._ready_inputs()
@@ -106,7 +108,7 @@ class Task():
             os.chdir(previous_dir)
 
     @property
-    def working_dir_name(self):
+    def key(self):
         return '{0}-{1:03d}'.format(type(self).__name__, self._id)
 
     def add_input(self, ip, filename=None):
@@ -159,6 +161,14 @@ class Task():
     def inputs(self):
         return self._inputs
 
+    def save(self, state_file):
+        state = {
+            'module': self.__module__,
+            'class': type(self).__name__,
+            'inputs': [ip.key for ip in self.inputs]
+        }
+        return state
+
 
 class InputTask(Task):
     def __init__(self):
@@ -174,6 +184,7 @@ class Pipeline(Singleton):
     _logger = None
     _root_node = None
     _unit_id = None
+    _units = None
 
     def __init__(self, log_level=logging.INFO, working_dir=None):
         Singleton.__init__(self)
@@ -186,6 +197,8 @@ class Pipeline(Singleton):
             self._configure_logging(log_level)
         if self._unit_id is None:
             self._unit_id = 0
+        if self._units is None:
+            self._units = {}
 
     def _configure_logging(self, log_level):
         self._logger = logging.getLogger(__name__)
@@ -196,6 +209,9 @@ class Pipeline(Singleton):
     def get_next_id(self):
         self._unit_id += 1
         return self._unit_id
+
+    def register(self, unit):
+        self._units[unit.key] = unit
 
     @property
     def logger(self):
@@ -214,6 +230,23 @@ class Pipeline(Singleton):
         finally:
             self._logger = None
             save_pipeline(self)
+
+    @classmethod
+    def load(cls, state_file):
+        json_state = json.loads(state_file.read())
+        instance = cls(
+            log_level=json_state['log_level'],
+            working_dir=json_state['working_dir']
+        )
+        instance._unit_id = json_state['unit_id']
+
+    def save(self, state_file):
+        state = {
+            'log_level': self._log_level,
+            'working_dir': self.working_dir,
+            'unit_id': self._unit_id
+        }
+        state_file.write(json.dumps(state))
 
 
 def save_pipeline(pipeline):
