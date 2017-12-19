@@ -1,5 +1,4 @@
 import pygraphviz as pgv
-from hashids import Hashids
 
 
 def make_graph(node, filename):
