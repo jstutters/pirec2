@@ -105,3 +105,6 @@ ENV/
 
 # Temporary test data
 tmp/
+
+# Test pipeline outputs
+pipeline.json
