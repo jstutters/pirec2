@@ -1,44 +1,19 @@
+import importlib
 import json
 import logging
 import os
-import pickle
 import shutil
 import tempfile
 from .singleton import Singleton
 
-class Source():
-    def __init__(self, value=None, filename=None):
-        self._value = value
-        self._filename = filename
-        self._is_file = filename is not None
-
-    @property
-    def ready(self):
-        return True
-
-    @property
-    def value(self):
-        return self._value
-
-    @property
-    def filename(self):
-        return self._filename
-
-    @property
-    def is_file(self):
-        return self._is_file
-
-    @property
-    def parent(self):
-        return None
-
 
 class Connector():
-    def __init__(self, parent, value=None, filename=None):
+    def __init__(self, parent, value=None, filename=None, key=None):
         self._parent = parent
         self._filename = filename
         self._value = value
         self._is_file = filename is not None
+        self._key = key
 
     @property
     def parent(self):
@@ -75,8 +50,52 @@ class Connector():
     def is_file(self):
         return self._is_file
 
-    def connect(self):
-        pass
+    @property
+    def key(self):
+        return self._key
+
+    def as_dict(self):
+        state = {
+            'type': type(self).__name__,
+            'parent': self.parent.key,
+            'value': self.value,
+            'filename': self.filename,
+            'key': self.key
+        }
+        return state
+
+
+class Source(Connector):
+    def __init__(self, parent, value=None, filename=None, key=None):
+        super().__init__(parent, value=value, filename=os.path.abspath(filename), key=key)
+
+    @property
+    def ready(self):
+        return True
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @property
+    def full_filename(self):
+        return self._filename
+
+    @property
+    def parent(self):
+        return None
+
+    def as_dict(self):
+        state = {
+            'type': type(self).__name__,
+            'value': self.value,
+            'filename': self.filename
+        }
+        return state
 
 
 class Task():
@@ -104,7 +123,6 @@ class Task():
         else:
             self.ready = True
         finally:
-            pickle.dump(self, open('task.pkl', 'wb'))
             os.chdir(previous_dir)
 
     @property
@@ -117,14 +135,17 @@ class Task():
             self._ip_map[id(ip)] = filename
         return ip
 
-    def add_output(self, value=None, filename=None):
-        if value is None:
-            op = Connector(self, filename=filename)
+    def add_output(self, value=None, filename=None, source=False):
+        if source:
+            op = Source(self, value=value, filename=filename)
         else:
-            op = Source(value=value)
+            op = Connector(self, filename=filename, key=len(self._outputs))
         self._outputs.append(op)
         return op
-    
+
+    def get_output(self, key):
+        return self._outputs[key]
+
     def _ready_inputs(self):
         for ip in self._inputs:
             if not ip.ready:
@@ -161,11 +182,11 @@ class Task():
     def inputs(self):
         return self._inputs
 
-    def save(self, state_file):
+    def as_dict(self):
         state = {
             'module': self.__module__,
             'class': type(self).__name__,
-            'inputs': [ip.key for ip in self.inputs]
+            'inputs': [ip.as_dict() for ip in self.inputs]
         }
         return state
 
@@ -177,6 +198,15 @@ class InputTask(Task):
 
     def run(self):
         pass
+
+    def as_dict(self):
+        state = {
+            'module': self.__module__,
+            'class': type(self).__name__,
+            'inputs': [{'type': 'Source', 'filename': ip.filename, 'value': ip.value}
+                       for ip in self._outputs]
+        }
+        return state
 
 
 class Pipeline(Singleton):
@@ -213,6 +243,9 @@ class Pipeline(Singleton):
     def register(self, unit):
         self._units[unit.key] = unit
 
+    def get_unit(self, key):
+        return self._units[key]
+
     @property
     def logger(self):
         return self._logger
@@ -221,34 +254,48 @@ class Pipeline(Singleton):
     def working_dir(self):
         return self._working_dir
 
-    def run(self, node):
-        self._root_node = node
+    def run(self, node=None):
+        if node is not None:
+            self._root_node = node
         try:
-            node.run()
+            self._root_node.run()
         except Exception as e:
             raise e
-        finally:
-            self._logger = None
-            save_pipeline(self)
-
-    @classmethod
-    def load(cls, state_file):
-        json_state = json.loads(state_file.read())
-        instance = cls(
-            log_level=json_state['log_level'],
-            working_dir=json_state['working_dir']
-        )
-        instance._unit_id = json_state['unit_id']
 
     def save(self, state_file):
         state = {
-            'log_level': self._log_level,
+            'log_level': self.logger.level,
             'working_dir': self.working_dir,
-            'unit_id': self._unit_id
+            'unit_id': self._unit_id,
+            'units': [u.as_dict() for u in self._units.values()],
+            'root_node': self._root_node.key
         }
         state_file.write(json.dumps(state))
 
-
-def save_pipeline(pipeline):
-    save_path = os.path.join(pipeline.working_dir, 'pipeline.pkl')
-    pickle.dump(pipeline, open(save_path, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+    @classmethod
+    def load(cls, state_file):
+        state = json.loads(state_file.read())
+        pipeline = cls(
+            log_level=state['log_level'],
+            working_dir=state['working_dir']
+        )
+        for unit in state['units']:
+            mod = importlib.import_module(unit['module'])
+            UnitClass = getattr(mod, unit['class'])
+            inputs = []
+            for saved_input in unit['inputs']:
+                ip = None
+                print(saved_input['type'])
+                if saved_input['type'] == 'Source':
+                    if saved_input['value']:
+                        ip = saved_input['value']
+                    elif saved_input['filename']:
+                        ip = saved_input['filename']
+                elif saved_input['type'] == 'Connector':
+                    ip = pipeline.get_unit(saved_input['parent']).get_output(saved_input['key'])
+                inputs.append(ip)
+            print('creating', unit['class'])
+            print('inputs:', inputs)
+            unit = UnitClass(*inputs)
+        pipeline._root_node = pipeline.get_unit(state['root_node'])
+        return pipeline

@@ -9,10 +9,10 @@ def make_graph(node, filename):
 
 def walk_graph(node, graph=None):
     if graph is None:
-        graph = pgv.AGraph()    
+        graph = pgv.AGraph()
     for ip in node.inputs:
         if ip.parent is not None:
-            graph.add_edge(_node_name(node), _node_name(ip.parent)) 
+            graph.add_edge(_node_name(node), _node_name(ip.parent))
             graph = walk_graph(ip.parent, graph)
     return graph
 

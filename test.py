@@ -24,3 +24,5 @@ if __name__ == '__main__':
     pipeline.run(end)
     print(end.result.value)
     make_graph(end, 'test.png')
+    with open('pipeline.json', 'w') as f:
+        pipeline.save(f)
