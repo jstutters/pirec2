@@ -38,6 +38,21 @@ class Connector():
     def filename(self):
         return self._filename
 
+    @property
+    def complete(self):
+        if self.is_file:
+            # todo: need to verify checksum hasn't changed
+            return os.path.exists(self.filename)
+        else:
+            return False
+
+    @property
+    def changed(self):
+        if self.is_file:
+            return False
+        else:
+            return True
+
     @filename.setter
     def filename(self, v):
         self._filename = v
@@ -65,39 +80,6 @@ class Connector():
         return state
 
 
-class Source(Connector):
-    def __init__(self, parent, value=None, filename=None, key=None):
-        super().__init__(parent, value=value, filename=os.path.abspath(filename), key=key)
-
-    @property
-    def ready(self):
-        return True
-
-    @property
-    def value(self):
-        return self._value
-
-    @property
-    def filename(self):
-        return self._filename
-
-    @property
-    def full_filename(self):
-        return self._filename
-
-    @property
-    def parent(self):
-        return None
-
-    def as_dict(self):
-        state = {
-            'type': type(self).__name__,
-            'value': self.value,
-            'filename': self.filename
-        }
-        return state
-
-
 class Task():
     def __init__(self):
         pipeline = Pipeline()
@@ -113,16 +95,23 @@ class Task():
         pipeline = Pipeline()
         previous_dir = os.getcwd()
         self._working_dir = os.path.join(pipeline.working_dir, self.key)
-        os.makedirs(self._working_dir)
+        if not os.path.exists(self._working_dir):
+            os.makedirs(self._working_dir)
         os.chdir(self._working_dir)
         self._ready_inputs()
-        try:
-            self.process()
-        except Exception as e:
-            raise e
+        if (self._complete() is False) or (self._inputs_changed() is True):
+            print(self.key, 'not complete')
+            try:
+                self.process()
+            except Exception as e:
+                raise e
+            else:
+                self.ready = True
+            finally:
+                os.chdir(previous_dir)
         else:
+            print(self.key, 'already complete')
             self.ready = True
-        finally:
             os.chdir(previous_dir)
 
     @property
@@ -135,11 +124,8 @@ class Task():
             self._ip_map[id(ip)] = filename
         return ip
 
-    def add_output(self, value=None, filename=None, source=False):
-        if source:
-            op = Source(self, value=value, filename=filename)
-        else:
-            op = Connector(self, filename=filename, key=len(self._outputs))
+    def add_output(self, value=None, filename=None):
+        op = Connector(self, value=value, filename=filename, key=len(self._outputs))
         self._outputs.append(op)
         return op
 
@@ -152,6 +138,14 @@ class Task():
                 ip.run()
             if ip.is_file:
                 self._get_file(ip)
+
+    def _complete(self):
+        completion = [op.complete for op in self._outputs]
+        return all(completion)
+
+    def _inputs_changed(self):
+        change = [ip.changed for ip in self._inputs]
+        return any(change)
 
     def _ip_name(self, ip):
         return self._ip_map[id(ip)]

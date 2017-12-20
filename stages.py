@@ -3,9 +3,10 @@ from pirec2.task import InputTask, Task, Pipeline
 
 
 class Start(InputTask):
-    def __init__(self, the_file):
+    def __init__(self, the_file, surname):
         super().__init__()
         self.the_file = self.add_output(filename=the_file)
+        self.surname = self.add_output(value=surname)
 
     def process(self):
         pass
@@ -23,6 +24,22 @@ class Shouter(Task):
         with open('quiet.txt', 'r') as quiet_file:
             with open(self.loud.filename, 'w') as loud_file:
                 loud_file.write(str.upper(quiet_file.read()))
+
+
+class Appender(Task):
+    def __init__(self, before, extra_text):
+        super().__init__()
+        self.before = self.add_input(before, filename='before.txt')
+        self.extra_text = self.add_input(extra_text)
+        self.appended = self.add_output(filename='appended.txt')
+
+    def process(self):
+        p = Pipeline()
+        p.logger.info('running Appended in %s', os.getcwd())
+        with open('before.txt', 'r') as before_file:
+            with open(self.appended.filename, 'w') as appended_file:
+                appended_file.write(before_file.read())
+                appended_file.write(self.extra_text.value)
 
 
 class Reverser(Task):

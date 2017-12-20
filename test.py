@@ -15,8 +15,9 @@ if __name__ == '__main__':
     if not os.path.exists(tmp_path):
         os.makedirs(tmp_path)
     pipeline = Pipeline(working_dir=tmp_path)
-    start = stages.Start('test.txt')
-    shouter = stages.Shouter(start.the_file)
+    start = stages.Start('test.txt', 'wibble')
+    appender = stages.Appender(start.the_file, start.surname)
+    shouter = stages.Shouter(appender.appended)
     reverser = stages.Reverser(shouter.loud)
     added = stages.Adder(shouter.loud, reverser.backward)
     other_added = stages.Adder(start.the_file, added.joined)
