@@ -1,3 +1,4 @@
+import hashlib
 import importlib
 import json
 import logging
@@ -7,13 +8,23 @@ import tempfile
 from .singleton import Singleton
 
 
+class NotSet():
+    def __repr__(self):
+        return 'NOTSET'
+
+
+NOTSET = NotSet()
+
+
 class Connector():
-    def __init__(self, parent, value=None, filename=None, key=None):
+    def __init__(self, parent, value=NOTSET, filename=None, key=None, checksum=None):
         self._parent = parent
         self._filename = filename
         self._value = value
         self._is_file = filename is not None
         self._key = key
+        self._checksum = checksum
+        self._value_changed = False
 
     @property
     def parent(self):
@@ -32,6 +43,7 @@ class Connector():
 
     @value.setter
     def value(self, v):
+        self._value_changed = True
         self._value = v
 
     @property
@@ -41,17 +53,16 @@ class Connector():
     @property
     def complete(self):
         if self.is_file:
-            # todo: need to verify checksum hasn't changed
-            return os.path.exists(self.filename)
+            return os.path.exists(self.full_filename) and (not self.changed)
         else:
-            return False
+            return not isinstance(self.value, NotSet)
 
     @property
     def changed(self):
         if self.is_file:
-            return False
+            return self.checksum != sha1sum(self.full_filename)
         else:
-            return True
+            return self._value_changed
 
     @filename.setter
     def filename(self, v):
@@ -75,9 +86,29 @@ class Connector():
             'parent': self.parent.key,
             'value': self.value,
             'filename': self.filename,
-            'key': self.key
+            'key': self.key,
+            'checksum': self.checksum
         }
         return state
+
+    @property
+    def checksum(self):
+        return self._checksum
+
+    def read_checksum(self):
+        if self.is_file:
+            self._checksum = sha1sum(self.full_filename)
+
+
+def sha1sum(filename):
+    sha1 = hashlib.sha1()
+    with open(filename, 'rb') as f:
+        while True:
+            data = f.read(65536)
+            if not data:
+                break
+            sha1.update(data)
+    return sha1.hexdigest()
 
 
 class Task():
@@ -90,17 +121,16 @@ class Task():
         self._working_dir = None
         self._id = pipeline.get_next_id()
         pipeline.register(self)
+        self._working_dir = os.path.join(pipeline.working_dir, self.key)
 
     def run(self):
-        pipeline = Pipeline()
         previous_dir = os.getcwd()
-        self._working_dir = os.path.join(pipeline.working_dir, self.key)
         if not os.path.exists(self._working_dir):
             os.makedirs(self._working_dir)
         os.chdir(self._working_dir)
         self._ready_inputs()
         if (self._complete() is False) or (self._inputs_changed() is True):
-            print(self.key, 'not complete')
+            Pipeline().logger.info('Running: %s', self.key)
             try:
                 self.process()
             except Exception as e:
@@ -110,7 +140,7 @@ class Task():
             finally:
                 os.chdir(previous_dir)
         else:
-            print(self.key, 'already complete')
+            Pipeline().logger.info('Up-to-date: %s', self.key)
             self.ready = True
             os.chdir(previous_dir)
 
@@ -124,7 +154,7 @@ class Task():
             self._ip_map[id(ip)] = filename
         return ip
 
-    def add_output(self, value=None, filename=None):
+    def add_output(self, value=NOTSET, filename=None):
         op = Connector(self, value=value, filename=filename, key=len(self._outputs))
         self._outputs.append(op)
         return op
@@ -147,14 +177,18 @@ class Task():
         change = [ip.changed for ip in self._inputs]
         return any(change)
 
+    def _checksum_outputs(self):
+        for op in self._outputs:
+            op.read_checksum()
+
     def _ip_name(self, ip):
         return self._ip_map[id(ip)]
 
     def _get_file(self, ip):
         pipeline = Pipeline()
         dest = os.path.join(self.working_dir, self._ip_name(ip))
-        pipeline.logger.info(
-            'copying %s to %s',
+        pipeline.logger.debug(
+            'Copying %s to %s',
             ip.full_filename,
             dest
         )
@@ -177,12 +211,18 @@ class Task():
         return self._inputs
 
     def as_dict(self):
+        self._checksum_outputs()
         state = {
             'module': self.__module__,
             'class': type(self).__name__,
             'inputs': [ip.as_dict() for ip in self.inputs]
         }
         return state
+
+    def set_checksums(self, checksums):
+        pairs = zip(self._inputs, checksums)
+        for ip, cs in pairs:
+            ip._checksum = cs
 
 
 class InputTask(Task):
@@ -191,16 +231,34 @@ class InputTask(Task):
         self._working_dir = os.getcwd()
 
     def run(self):
-        pass
+        if self._inputs_changed():
+            Pipeline().logger.info('Running: %s', self.key)
+        else:
+            Pipeline().logger.info('Up-to-date: %s', self.key)
+        self.ready = True
+
+    def _read_output_checksums(self):
+        for op in self._outputs:
+            op.read_checksum()
 
     def as_dict(self):
+        self._read_output_checksums()
         state = {
             'module': self.__module__,
             'class': type(self).__name__,
-            'inputs': [{'type': 'Source', 'filename': ip.filename, 'value': ip.value}
+            'inputs': [{'type': 'Source', 'filename': ip.filename, 'value': ip.value, 'checksum': ip.checksum}
                        for ip in self._outputs]
         }
         return state
+
+    def _inputs_changed(self):
+        change = [op.changed for op in self._outputs]
+        return any(change)
+
+    def set_checksums(self, checksums):
+        pairs = zip(self._outputs, checksums)
+        for op, cs in pairs:
+            op._checksum = cs
 
 
 class Pipeline(Singleton):
@@ -248,6 +306,10 @@ class Pipeline(Singleton):
     def working_dir(self):
         return self._working_dir
 
+    @property
+    def root_node(self):
+        return self._root_node
+
     def run(self, node=None):
         if node is not None:
             self._root_node = node
@@ -264,11 +326,11 @@ class Pipeline(Singleton):
             'units': [u.as_dict() for u in self._units.values()],
             'root_node': self._root_node.key
         }
-        state_file.write(json.dumps(state))
+        state_file.write(json.dumps(state, default=json_encode))
 
     @classmethod
     def load(cls, state_file):
-        state = json.loads(state_file.read())
+        state = json.loads(state_file.read(), object_hook=json_decode)
         pipeline = cls(
             log_level=state['log_level'],
             working_dir=state['working_dir']
@@ -277,19 +339,34 @@ class Pipeline(Singleton):
             mod = importlib.import_module(unit['module'])
             UnitClass = getattr(mod, unit['class'])
             inputs = []
+            checksums = []
             for saved_input in unit['inputs']:
                 ip = None
-                print(saved_input['type'])
                 if saved_input['type'] == 'Source':
-                    if saved_input['value']:
+                    if not isinstance(saved_input['value'], NotSet):
                         ip = saved_input['value']
                     elif saved_input['filename']:
                         ip = saved_input['filename']
                 elif saved_input['type'] == 'Connector':
                     ip = pipeline.get_unit(saved_input['parent']).get_output(saved_input['key'])
                 inputs.append(ip)
-            print('creating', unit['class'])
-            print('inputs:', inputs)
+                checksums.append(saved_input['checksum'])
             unit = UnitClass(*inputs)
+            unit.set_checksums(checksums)
         pipeline._root_node = pipeline.get_unit(state['root_node'])
         return pipeline
+
+
+def json_encode(o):
+    if isinstance(o, NotSet):
+        return 'NOTSET'
+    else:
+        pass
+    return json.JSONEncoder.default(o)
+
+
+def json_decode(o):
+    for k in o:
+        if o[k] == 'NOTSET':
+            o[k] = NOTSET
+    return o

@@ -2,14 +2,18 @@ import os
 from pirec2.task import InputTask, Task, Pipeline
 
 
-class Start(InputTask):
-    def __init__(self, the_file, surname):
+class SimpleStart(InputTask):
+    def __init__(self, the_file, extra):
         super().__init__()
         self.the_file = self.add_output(filename=the_file)
-        self.surname = self.add_output(value=surname)
+        self.extra = self.add_output(value=extra)
 
-    def process(self):
-        pass
+
+class Start(InputTask):
+    def __init__(self, the_file, the_other_file):
+        super().__init__()
+        self.the_file = self.add_output(filename=the_file)
+        self.the_other_file = self.add_output(filename=the_other_file)
 
 
 class Shouter(Task):
@@ -20,7 +24,6 @@ class Shouter(Task):
 
     def process(self):
         p = Pipeline()
-        p.logger.info('running Shouter in %s', os.getcwd())
         with open('quiet.txt', 'r') as quiet_file:
             with open(self.loud.filename, 'w') as loud_file:
                 loud_file.write(str.upper(quiet_file.read()))
@@ -35,7 +38,6 @@ class Appender(Task):
 
     def process(self):
         p = Pipeline()
-        p.logger.info('running Appended in %s', os.getcwd())
         with open('before.txt', 'r') as before_file:
             with open(self.appended.filename, 'w') as appended_file:
                 appended_file.write(before_file.read())
@@ -50,7 +52,6 @@ class Reverser(Task):
 
     def process(self):
         p = Pipeline()
-        p.logger.info('running Reverser')
         with open('forward.txt', 'r') as forward_file:
             with open('backward.txt', 'w') as backward_file:
                 backward_str = forward_file.read()[::-1]
@@ -65,7 +66,6 @@ class End(Task):
 
     def process(self):
         p = Pipeline()
-        p.logger.info('running End')
         with open('input.txt', 'r') as input_file:
             self.result.value = input_file.read()
 
