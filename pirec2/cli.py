@@ -2,8 +2,8 @@ import argparse
 import importlib
 import os
 import sys
-from pirec2.graph import make_graph
-from pirec2.task import Pipeline
+from .graph import make_graph
+from .task import Pipeline
 
 
 def run(pipeline_name, save_filename=None, skip_checksums=False):
