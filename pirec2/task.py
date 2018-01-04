@@ -251,11 +251,19 @@ class InputTask(Task):
 
     def as_dict(self):
         self._read_output_checksums()
+        input_state = [
+            {
+                'type': 'Source',
+                'filename': ip.filename,
+                'value': ip.value,
+                'checksum': ip.checksum
+            }
+            for ip in self._outputs
+        ]
         state = {
             'module': self.__module__,
             'class': type(self).__name__,
-            'inputs': [{'type': 'Source', 'filename': ip.filename, 'value': ip.value, 'checksum': ip.checksum}
-                       for ip in self._outputs]
+            'inputs': input_state
         }
         return state
 

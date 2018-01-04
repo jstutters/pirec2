@@ -30,8 +30,18 @@ def run(pipeline_name, save_filename=None, skip_checksums=False):
 def make_parser():
     parser = argparse.ArgumentParser(description='Neuroimaging build system.')
     parser.add_argument('pipeline', help='pipeline definition')
-    parser.add_argument('-s', dest='record_filename', metavar='record_filename', help='JSON pipeline record', default=None)
-    parser.add_argument('-c', dest='skip_checksums', action='store_true')
+    parser.add_argument(
+        '-s',
+        dest='record_filename',
+        metavar='record_filename',
+        help='JSON pipeline record',
+        default=None
+    )
+    parser.add_argument(
+        '-c',
+        dest='skip_checksums',
+        action='store_true'
+    )
     return parser
 
 
