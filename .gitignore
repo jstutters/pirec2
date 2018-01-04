@@ -108,3 +108,6 @@ tmp/
 
 # Test pipeline outputs
 pipeline.json
+
+# Test pipelines
+testing/
