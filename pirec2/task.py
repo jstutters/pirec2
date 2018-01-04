@@ -53,14 +53,19 @@ class Connector():
     @property
     def complete(self):
         if self.is_file:
-            return os.path.exists(self.full_filename) and (not self.changed)
+            no_change = self.changed is False
+            exists = os.path.exists(self.full_filename)
+            return exists and no_change
         else:
             return not isinstance(self.value, NotSet)
 
     @property
     def changed(self):
         if self.is_file:
-            return self.checksum != sha1sum(self.full_filename)
+            if Pipeline().skip_checksums:
+                return False
+            else:
+                return self.checksum != sha1sum(self.full_filename)
         else:
             return self._value_changed
 
@@ -144,9 +149,12 @@ class Task():
             self.ready = True
             os.chdir(previous_dir)
 
+    def process(self):
+        pass
+
     @property
     def key(self):
-        return '{0}-{1:03d}'.format(type(self).__name__, self._id)
+        return '{1:03d}-{0}'.format(type(self).__name__, self._id)
 
     def add_input(self, ip, filename=None):
         self._inputs.append(ip)
@@ -267,14 +275,17 @@ class Pipeline(Singleton):
     _root_node = None
     _unit_id = None
     _units = None
+    _skip_checksums = None
 
-    def __init__(self, log_level=logging.INFO, working_dir=None):
+    def __init__(self, log_level=logging.INFO, working_dir=None, skip_checksums=False):
         Singleton.__init__(self)
         if self._working_dir is None:
             if working_dir is not None:
                 self._working_dir = working_dir
             else:
                 self._working_dir = tempfile.mkdtemp()
+        if self._skip_checksums is None:
+            self._skip_checksums = skip_checksums
         if self._logger is None:
             self._configure_logging(log_level)
         if self._unit_id is None:
@@ -294,6 +305,7 @@ class Pipeline(Singleton):
 
     def register(self, unit):
         self._units[unit.key] = unit
+        self._root_node = unit
 
     def get_unit(self, key):
         return self._units[key]
@@ -305,6 +317,10 @@ class Pipeline(Singleton):
     @property
     def working_dir(self):
         return self._working_dir
+
+    @property
+    def skip_checksums(self):
+        return self._skip_checksums
 
     @property
     def root_node(self):
