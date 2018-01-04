@@ -1,3 +1,3 @@
-from .task import Pipeline, InputTask, Task
+from .task import InputTask, Task
 
-__all__ = ['Pipeline', 'InputTask', 'Task']
+__all__ = ['InputTask', 'Task']
