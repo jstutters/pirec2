@@ -5,7 +5,7 @@ def make_graph(node, filename):
     nodes = walk_graph(node)
     g = pgv.AGraph(directed=True)
     for n in nodes:
-        g.add_edge(n[0], n[2], label=n[1], fontsize='8')
+        g.add_edge(n[0], n[2], sametail=n[1], label=n[1], fontsize='8')
     g = g.reverse()
     g.layout(prog='dot')
     g.draw(filename)
