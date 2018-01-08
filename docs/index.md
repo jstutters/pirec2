@@ -107,7 +107,7 @@ class End(Task):
         self.result = self.add_output(filename='output.nii.gz')
 
     def process(self):
-        pass
+        shutil.copy('registered.nii.gz', 'output.nii.gz')
 
 
 def definition():
@@ -124,3 +124,43 @@ def definition():
     end = End(registered_mask=resample_mask.output)
     return end
 ```
+
+The ``Start`` class has only outputs and is responsible from bringing files
+in from the rest of the filesystem to the pipeline working directory. The
+``End`` class gathers the results of your pipeline and may do things like
+write report files or insert database records. The five instructions in the
+definition function do the following:
+
+ 1. Instantiate the ``Start`` class and set the input filenames.
+ 2. Instantiate a ``Register`` task and connect it to the ``ref`` and ``mask_img`` outputs from ``start``.
+ 3. Instantiate a ``ResampleMask`` task and connect it to the ``ref`` and ``mask`` outputs from ``start`` and the ``affine`` output from the ``Register`` task.
+ 4. Instantiate the ``End`` task and connect it's input to the output of ``ResampleMask``.
+ 5. Return the instance of ``End``
+
+ To run the pipeline change to the directory containing ``tasks.py``, ``reg_pipeline.py`` and the input images and run:
+
+    pirec2 reg_pipeline
+
+You should see some output from pirec2 indicating which tasks are running and
+some program output. After the pipeline has completed the newly created
+``tmp`` directory will contain the working directories for each task. Now try
+running pirec2 again with the -c argument (which tells pirec2 to skip
+checksum verification of existing files):
+
+    pirec2 -c reg_pipeline
+    
+The command output should now indicate that all tasks are up-to-date. Next
+try deleting the output of the resampling task and re-running the pipeline:
+
+    rm tmp/003-ResampleMask/output.nii.gz
+    pirec2 -c reg_pipeline
+
+This time the first two tasks should be marked as up-to-date but the third
+task will execute again.
+
+### Graphing
+
+pirec2 can create a visualisation of your pipeline by specifying the -g
+switch. An example graph is shown below:
+
+![Pipeline graph](reg.png)
