@@ -62,7 +62,10 @@ class Connector():
             if Pipeline().skip_checksums:
                 return False
             else:
-                return self.checksum != sha1sum(self.full_filename)
+                try:
+                    return self.checksum != sha1sum(self.full_filename)
+                except FileNotFoundError:
+                    return True
         else:
             return self._value_changed
 
