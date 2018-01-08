@@ -27,6 +27,13 @@ def run(pipeline_name, save_filename=None, skip_checksums=False):
             pipeline.save(f)
 
 
+def graph(pipeline_name):
+    sys.path.append(os.getcwd())
+    mod = importlib.import_module(pipeline_name)
+    end = mod.definition()
+    make_graph(end, pipeline_name + '.png')
+
+
 def make_parser():
     parser = argparse.ArgumentParser(description='Neuroimaging build system.')
     parser.add_argument('pipeline', help='pipeline definition')
@@ -42,13 +49,21 @@ def make_parser():
         dest='skip_checksums',
         action='store_true'
     )
+    parser.add_argument(
+        '-g',
+        dest='make_graph',
+        action='store_true'
+    )
     return parser
 
 
 def main():
     parser = make_parser()
     args = parser.parse_args()
-    run(args.pipeline, args.record_filename, args.skip_checksums)
+    if args.make_graph:
+        graph(args.pipeline)
+    else:
+        run(args.pipeline, args.record_filename, args.skip_checksums)
 
 
 if __name__ == '__main__':
